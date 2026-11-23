@@ -86,6 +86,7 @@ export interface QuizSessionQuestion {
   id: string
   question: Question['question']
   questionText: string
+  correctAnswer: AnswerLetter
   source: string
   isNew: boolean
   options: Array<{
@@ -477,7 +478,7 @@ export async function buildQuizSession(
   user: User,
   bankId: string,
   mode: QuizMode,
-  limit = 5,
+  limit = 10,
 ): Promise<{
   bank: { id: string; name: string }
   questions: QuizSessionQuestion[]
@@ -520,6 +521,7 @@ export async function buildQuizSession(
       id: q.id,
       question: q.question,
       questionText: q.questionTitle || lexicalToPlainText(q.question),
+      correctAnswer: q.correctAnswer as AnswerLetter,
       source: q.source ?? '',
       isNew: !attemptedIds.has(q.id),
       options: [

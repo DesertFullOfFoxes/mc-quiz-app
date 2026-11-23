@@ -10,7 +10,11 @@ interface StartQuizClientProps {
   banks: BankSummary[]
   initialBankId?: string
   initialMode?: QuizMode
+  initialCount?: number
 }
+
+const DEFAULT_BATCH_SIZE = 10
+const PRESET_COUNTS = [5, 10, 20] as const
 
 const MODES: Array<{
   id: QuizMode
@@ -42,6 +46,7 @@ export function StartQuizClient({
   banks,
   initialBankId,
   initialMode = 'mix',
+  initialCount = DEFAULT_BATCH_SIZE,
 }: StartQuizClientProps) {
   const router = useRouter()
   const [selectedBankId, setSelectedBankId] = useState<string>(() => {
@@ -51,6 +56,17 @@ export function StartQuizClient({
     return banks[0]?.id ?? ''
   })
   const [mode, setMode] = useState<QuizMode>(initialMode)
+  const [batchChoice, setBatchChoice] = useState<'all' | 'count'>('count')
+  const [requestedCount, setRequestedCount] = useState<number>(
+    Number.isFinite(initialCount) && initialCount > 0 ? Math.floor(initialCount) : DEFAULT_BATCH_SIZE,
+  )
+  const [customInput, setCustomInput] = useState<string>(
+    String(
+      Number.isFinite(initialCount) && initialCount > 0
+        ? Math.floor(initialCount)
+        : DEFAULT_BATCH_SIZE,
+    ),
+  )
 
   const selectedBank = banks.find((b) => b.id === selectedBankId) ?? banks[0] ?? null
 
@@ -80,7 +96,9 @@ export function StartQuizClient({
         ? selectedBank.answeredCount
         : selectedBank.totalQuestions
 
-  const sessionLength = Math.min(5, availableForMode)
+  const desiredCount =
+    batchChoice === 'all' ? availableForMode : Math.max(1, Math.min(500, requestedCount))
+  const sessionLength = Math.min(desiredCount, availableForMode)
   const canStart = sessionLength > 0
   const activeModeConfig = MODES.find((m) => m.id === mode) ?? MODES[2]
 
@@ -91,10 +109,45 @@ export function StartQuizClient({
         ? 'No previously answered questions in this bank yet. Answer some new questions first.'
         : 'This bank does not have any questions yet. Import a CSV to add questions.'
 
+  const handleSelectPreset = (count: number) => {
+    setBatchChoice('count')
+    setRequestedCount(count)
+    setCustomInput(String(count))
+  }
+
+  const handleSelectAll = () => {
+    setBatchChoice('all')
+    if (availableForMode > 0) {
+      setCustomInput(String(availableForMode))
+    }
+  }
+
+  const handleCustomInputChange = (value: string) => {
+    setCustomInput(value)
+    const parsed = Number.parseInt(value, 10)
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      setBatchChoice('count')
+      setRequestedCount(Math.min(500, parsed))
+    }
+  }
+
+  const handleCustomInputBlur = () => {
+    const parsed = Number.parseInt(customInput, 10)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setBatchChoice('count')
+      setRequestedCount(DEFAULT_BATCH_SIZE)
+      setCustomInput(String(DEFAULT_BATCH_SIZE))
+    } else {
+      const clamped = Math.min(500, parsed)
+      setRequestedCount(clamped)
+      setCustomInput(String(clamped))
+    }
+  }
+
   const handleStart = () => {
     if (!canStart) return
     router.push(
-      `/practice/session?bank=${encodeURIComponent(selectedBank.id)}&mode=${encodeURIComponent(mode)}`,
+      `/practice/session?bank=${encodeURIComponent(selectedBank.id)}&mode=${encodeURIComponent(mode)}&count=${encodeURIComponent(String(sessionLength))}`,
     )
   }
 
@@ -171,9 +224,55 @@ export function StartQuizClient({
         })}
       </div>
 
+      <div className="batch-size-section">
+        <p className="section-kicker">QUESTIONS PER BATCH</p>
+        <div className="batch-size-row">
+          {PRESET_COUNTS.map((preset) => {
+            const isSelected = batchChoice === 'count' && requestedCount === preset
+            return (
+              <button
+                key={preset}
+                type="button"
+                className={`batch-pill ${isSelected ? 'is-selected' : ''}`}
+                onClick={() => handleSelectPreset(preset)}
+              >
+                {preset}
+              </button>
+            )
+          })}
+
+          <button
+            type="button"
+            className={`batch-pill ${batchChoice === 'all' ? 'is-selected' : ''}`}
+            onClick={handleSelectAll}
+            disabled={availableForMode === 0}
+          >
+            All ({availableForMode})
+          </button>
+
+          <label className="batch-custom-wrap">
+            <span className="batch-custom-label">Custom</span>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              inputMode="numeric"
+              aria-label="Custom number of questions"
+              className="form-input batch-custom-input"
+              value={customInput}
+              onChange={(e) => handleCustomInputChange(e.target.value)}
+              onBlur={handleCustomInputBlur}
+            />
+          </label>
+        </div>
+      </div>
+
       <p style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text-secondary)' }}>
-        {sessionLength} {sessionLength === 1 ? 'question' : 'questions'} · Immediate feedback · No
-        time limit
+        {sessionLength} {sessionLength === 1 ? 'question' : 'questions'}
+        {availableForMode > 0 && sessionLength < availableForMode
+          ? ` (of ${availableForMode} available)`
+          : ''}{' '}
+        · Immediate feedback · No time limit
       </p>
 
       {!canStart && (

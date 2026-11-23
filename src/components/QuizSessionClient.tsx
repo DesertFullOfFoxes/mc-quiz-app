@@ -13,6 +13,7 @@ interface QuizSessionClientProps {
     name: string
   }
   mode: QuizMode
+  requestedCount: number
   questions: QuizSessionQuestion[]
 }
 
@@ -22,10 +23,14 @@ interface CheckedAnswerState {
   isCorrect: boolean
 }
 
-export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientProps) {
+export function QuizSessionClient({
+  bank,
+  mode,
+  requestedCount,
+  questions,
+}: QuizSessionClientProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [saveWarning, setSaveWarning] = useState<string | null>(null)
   const [checked, setChecked] = useState<CheckedAnswerState | null>(null)
   const [resultsByQuestion, setResultsByQuestion] = useState<Record<string, boolean>>({})
   const [finished, setFinished] = useState(false)
@@ -34,7 +39,7 @@ export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientPr
     return (
       <div className="page-body-narrow">
         <Link
-          href={`/practice?bank=${encodeURIComponent(bank.id)}`}
+          href={`/practice?bank=${encodeURIComponent(bank.id)}&count=${encodeURIComponent(String(requestedCount))}`}
           className="back-link"
         >
           ← &nbsp;Back to practice setup
@@ -45,7 +50,7 @@ export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientPr
             Try switching quiz modes or importing more questions into {bank.name}.
           </p>
           <Link
-            href={`/practice?bank=${encodeURIComponent(bank.id)}`}
+            href={`/practice?bank=${encodeURIComponent(bank.id)}&count=${encodeURIComponent(String(requestedCount))}`}
             className="btn btn-primary"
           >
             Choose another mode
@@ -64,6 +69,12 @@ export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientPr
     return (
       <div className="page-body-narrow">
         <h1 className="page-title page-title-lg">Quiz results</h1>
+
+        {saveWarning && (
+          <div className="banner-error" style={{ marginTop: 16 }}>
+            {saveWarning}
+          </div>
+        )}
 
         <div className="results-score-card">
           <div>
@@ -98,7 +109,7 @@ export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientPr
             Back to question bank
           </Link>
           <Link
-            href={`/practice?bank=${encodeURIComponent(bank.id)}&mode=${encodeURIComponent(mode)}`}
+            href={`/practice?bank=${encodeURIComponent(bank.id)}&mode=${encodeURIComponent(mode)}&count=${encodeURIComponent(String(requestedCount))}`}
             className="btn btn-primary"
             style={{ minWidth: 184 }}
           >
@@ -114,54 +125,47 @@ export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientPr
   const progressPercent = ((currentIndex + 1) / total) * 100
   const isLastQuestion = currentIndex === total - 1
 
-  const handleSelectOption = async (letter: AnswerLetter) => {
-    if (checked || submitting) return
-    setSubmitting(true)
-    setSubmitError(null)
+  const handleSelectOption = (letter: AnswerLetter) => {
+    if (checked) return
 
-    try {
-      const res = await fetch('/quiz-api/attempt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          questionId: currentQuestion.id,
-          selectedAnswer: letter,
-        }),
-      })
+    // Grade immediately on the client for instant feedback (0ms latency)
+    const correctAnswer = currentQuestion.correctAnswer
+    const isCorrect = letter === correctAnswer
+    const questionId = currentQuestion.id
 
-      const data = (await res.json()) as {
-        selectedAnswer?: AnswerLetter
-        correctAnswer?: AnswerLetter
-        isCorrect?: boolean
-        error?: string
-      }
+    setChecked({
+      selectedAnswer: letter,
+      correctAnswer,
+      isCorrect,
+    })
+    setResultsByQuestion((prev) => ({
+      ...prev,
+      [questionId]: isCorrect,
+    }))
 
-      if (!res.ok || !data.correctAnswer) {
-        setSubmitError(data.error ?? 'Could not check answer. Please try again.')
-        return
-      }
-
-      const isCorrect = Boolean(data.isCorrect)
-      setChecked({
+    // Persist the attempt to Payload in the background without blocking the UI
+    void fetch('/quiz-api/attempt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      keepalive: true,
+      body: JSON.stringify({
+        questionId,
         selectedAnswer: letter,
-        correctAnswer: data.correctAnswer,
-        isCorrect,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          setSaveWarning('One or more attempts could not be saved to history.')
+        }
       })
-      setResultsByQuestion((prev) => ({
-        ...prev,
-        [currentQuestion.id]: isCorrect,
-      }))
-    } catch {
-      setSubmitError('Network error while checking answer.')
-    } finally {
-      setSubmitting(false)
-    }
+      .catch(() => {
+        setSaveWarning('One or more attempts could not be saved due to a network error.')
+      })
   }
 
   const handleRedo = () => {
     setChecked(null)
-    setSubmitError(null)
   }
 
   const handleNext = () => {
@@ -170,7 +174,6 @@ export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientPr
     } else {
       setCurrentIndex((idx) => idx + 1)
       setChecked(null)
-      setSubmitError(null)
     }
   }
 
@@ -181,7 +184,7 @@ export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientPr
     <div className="page-body-narrow">
       <div className="quiz-topbar">
         <Link
-          href={`/practice?bank=${encodeURIComponent(bank.id)}`}
+          href={`/practice?bank=${encodeURIComponent(bank.id)}&count=${encodeURIComponent(String(requestedCount))}`}
           className="back-link"
           style={{ marginBottom: 0 }}
         >
@@ -220,15 +223,13 @@ export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientPr
         }}
       >
         {!checked
-          ? submitting
-            ? 'Checking your answer…'
-            : 'Select an answer to check it.'
+          ? 'Select an answer to check it.'
           : checked.isCorrect
             ? 'Correct.'
             : `Incorrect. The correct answer is ${checked.correctAnswer}.`}
       </p>
 
-      {submitError && <div className="banner-error">{submitError}</div>}
+      {saveWarning && <div className="banner-error">{saveWarning}</div>}
 
       <div className="quiz-options">
         {currentQuestion.options.map((opt) => {
@@ -259,8 +260,8 @@ export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientPr
               key={opt.letter}
               type="button"
               className={`quiz-option ${optionClass}`}
-              disabled={Boolean(checked) || submitting}
-              onClick={() => void handleSelectOption(opt.letter)}
+              disabled={Boolean(checked)}
+              onClick={() => handleSelectOption(opt.letter)}
             >
               <span className="quiz-option-left">
                 <span className="option-letter-box">{opt.letter}</span>
