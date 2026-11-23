@@ -201,7 +201,11 @@ export function QuizSessionClient({ bank, mode, questions }: QuizSessionClientPr
       </p>
 
       <div className="quiz-question-title">
-        <RichText value={currentQuestion.question} variant="block" />
+        <RichText
+          value={currentQuestion.question}
+          variant="block"
+          className="question-rich-text"
+        />
       </div>
 
       <p

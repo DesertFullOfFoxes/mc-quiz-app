@@ -39,8 +39,12 @@ export default async function QuestionHistoryPage({
         ← &nbsp;Question bank
       </Link>
 
-      <div className="page-title page-title-md" style={{ marginBottom: 10 }}>
-        <RichText value={data.question.question} variant="block" />
+      <div className="page-title page-title-md" style={{ marginBottom: 14 }}>
+        <RichText
+          value={data.question.question}
+          variant="block"
+          className="question-rich-text"
+        />
       </div>
 
       <div className="page-header" style={{ marginBottom: 24 }}>

@@ -5,6 +5,7 @@ import {
   FORMAT_BOLD,
   FORMAT_CODE,
   FORMAT_ITALIC,
+  FORMAT_UNDERLINE,
   lexicalToPlainText,
   stringToLexical,
 } from '@/lib/richtext'
@@ -98,5 +99,22 @@ describe('Rich text conversion', () => {
     const doc = stringToLexical('<h3>Section</h3><p>Pick <strong>one</strong> option.</p>')
     expect(doc.root.children[0].type).toBe('heading')
     expect(lexicalToPlainText(doc)).toBe('Section Pick one option.')
+  })
+
+  it('preserves leading instruction paragraph followed by heading with bold+underlined target', () => {
+    const doc = stringToLexical(
+      '<p>読み：下線部の言葉の読み方を選びなさい。</p>\n<h2>仮説が正しいか<strong><u>実験</u></strong>で確かめる。</h2>',
+    )
+    expect(doc.root.children).toHaveLength(2)
+    expect(doc.root.children[0].type).toBe('paragraph')
+    expect(doc.root.children[1].type).toBe('heading')
+    const heading = doc.root.children[1]
+    if (heading.type === 'heading') {
+      expect(heading.tag).toBe('h2')
+      const target = heading.children.find((n) => n.type === 'text' && n.text === '実験')
+      expect(target && target.type === 'text' ? target.format : 0).toBe(
+        FORMAT_BOLD | FORMAT_UNDERLINE,
+      )
+    }
   })
 })
