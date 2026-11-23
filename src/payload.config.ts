@@ -17,6 +17,16 @@ const dirname = path.dirname(filename)
 export default buildFigmaConfig({
   admin: {
     user: Users.slug,
+    meta: {
+      titleSuffix: '— recall',
+      icons: [
+        {
+          rel: 'icon',
+          type: 'image/svg+xml',
+          url: '/favicon.svg',
+        },
+      ],
+    },
     importMap: {
       baseDir: path.resolve(dirname),
     },

@@ -13,6 +13,10 @@ const inter = Inter({
 export const metadata = {
   title: 'recall — Multiple-choice quiz app',
   description: 'Organize question banks, import CSVs, practice quizzes, and track recall accuracy.',
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    shortcut: '/favicon.svg',
+  },
 }
 
 export default async function RootLayout(props: { children: React.ReactNode }) {
